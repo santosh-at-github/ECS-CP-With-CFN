@@ -16,7 +16,7 @@ Parameters:
   DockerImage:
     Description: 'Docker Image using which ECS Service Will be created.'
     Type: String
-    Default: '342241566140.dkr.ecr.us-east-1.amazonaws.com/php_apache/web_image:with_improved_php_scripts_colour_env_variable_and_logging_v4'
+    Default: 'MyAccountNumber.dkr.ecr.us-east-1.amazonaws.com/php_apache/web_image:with_improved_php_scripts_colour_env_variable_and_logging_v4'
 Resources:
   VPCStack:
     Type: 'AWS::CloudFormation::Stack'
