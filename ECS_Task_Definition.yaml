@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Create ECS Task Definition.'
+Parameters:
+  DockerImageName:
+    Description: 'Docker Image to be used in Task Definition.'
+    Type: String
+  CloudWatchLogsGroup:
+    Description: 'CloudWatch Log Group to which Task will publish its Logs.'
+    Type: String
+  TaskRole:
+    Description: 'ARN of the Task Role.'
+    Type: String
+  TaskExecutionRole:
+    Description: 'ARN of the Task Execution Role.'
+    Type: String
+Resources:
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub Ecs-Task-Definition-${AWS::StackName}
+      Cpu: 256
+      Memory: 256
+      TaskRoleArn : !Ref TaskRole
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      ContainerDefinitions:
+        - Name: Instance-Info
+          Essential: true
+          Image: !Ref DockerImageName
+          PortMappings:
+            - ContainerPort: 80
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+Outputs:
+  TaskDefinitionARN:
+    Description: 'ARN of the Task Drfinition'
+    Value: !Ref 'TaskDefinition'

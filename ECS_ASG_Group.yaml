@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create Launch Configuration and AutoScaling Group in the provided subnets.
+Parameters:
+  LCSecurityGroups:
+    Description: 'Comma seperated list of one or more Security Groups that will be associated with the Launch Config'
+    Type: CommaDelimitedList
+  ASGSubnetIds:
+    Description: 'Comma seperated list of one or more Subnets In which ALB will be created'
+    Type: CommaDelimitedList
+  TargetGroupARNs:
+    Description: 'Comma seperated list of one or more TargetGroup ARN to be associated with ASG'
+    Type: CommaDelimitedList
+  ECSInstanceType:
+    Description: EC2 instance type to be launched by ASG
+    Type: String
+    Default: t2.small
+    ConstraintDescription: Must be a valid EC2 instance type.
+  ECSKeyName:
+    Description: The EC2 Key Pair to allow SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: MainPubKey
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+  ECSLatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id'
+  ECSCluster:
+    Description: ECS Cluster to which EC2 instance should join.
+    Default: Issue-Reproduce-1
+    Type: String
+    ConstraintDescription: Must be the name of an existing ECS Cluster.
+  ASGMaxSize:
+    Description: Max size of the AutoScaling Group
+    Type: 'Number'
+    Default: 10
+    ConstraintDescription: Must be an positive integer higher then 1
+  ECSInstanceProfile:
+    Description: 'IAM Role of the above Instance profile'
+    Type: String
+    Default: 'ecsInstanceRole'
+Resources:
+  ECSInstanceGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref ASGSubnetIds
+      LaunchConfigurationName: !Ref 'LaunchConfig'
+      MinSize: '0'
+      DesiredCapacity: 0
+      MaxSize: !Ref 'ASGMaxSize'
+      TargetGroupARNs: !Ref TargetGroupARNs
+    # CreationPolicy:
+    #   ResourceSignal:
+    #     Timeout: PT15M
+    #     Count: 1
+    # UpdatePolicy:
+    #   AutoScalingRollingUpdate:
+    #     MinInstancesInService: 1
+    #     MaxBatchSize: 1
+    #     PauseTime: PT15M
+    #     WaitOnResourceSignals: true
+  LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      KeyName: !Ref 'ECSKeyName'
+      ImageId: !Ref 'ECSLatestAmiId'
+      SecurityGroups: !Ref LCSecurityGroups
+      InstanceType: !Ref 'ECSInstanceType'
+      IamInstanceProfile: !Ref 'ECSInstanceProfile'
+      UserData: !Base64
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - 'echo "ECS_CLUSTER='
+            - !Ref ECSCluster
+            - '" >> /etc/ecs/ecs.config'
+            - |+
+Outputs:
+  ASGName:
+    Description: 'AutoScaling Group Name'
+    Value: !Ref 'ECSInstanceGroup'

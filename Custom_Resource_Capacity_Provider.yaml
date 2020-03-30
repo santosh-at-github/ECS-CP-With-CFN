@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create Launch Configuration and AutoScaling Group in the provided subnets.
+Parameters:
+  ECSTaskDefinition:
+    Description: 'Task Definition Name With Version Number'
+    Type: String
+  ALBTargetGroupARN:
+    Description: 'ARN Of the ALB Target Group'
+    Type: String
+  ASGName:
+    Description: 'Name of the ASG which will be used to create ECS ASG Capacity Provider'
+    Type: String
+  ECSClusterName:
+    Description: 'Name of the ECS Cluster to which ECS Capacity Provider will be attached'
+    Type: String
+  LambdaZipsBucket:
+    Description: 'Name of S3 bucket in which ZIP file of lambda code is located'
+    Type: String
+  LambdaZipFunctionS3KeyPrefix:
+    Description: 'S3 prefix in above bucket where ZIP file of lambda code is located'
+    Type: String
+  LambdaExecutionRole:
+    Description: 'IAM Role which will be used to execute Lambda function.'
+    Type: String
+  TargetCapacity:
+    Description: 'The Taget Capacity Value to the Capacity Provider. TC less then 100% provisions extra capacity then needed by pending task.'
+    Type: Number
+    Default: 100
+    MinValue: 1
+    MaxValue: 100
+  MaximumScalingStepSize:
+    Description: 'The maximum number of instances that can be launched by CP at a time.'
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 100
+Resources:
+  ASGCapacityProviderCreator:
+    Type: 'Custom::ASGCapacityProvider'
+    Properties:
+      ServiceToken: !GetAtt
+        - ASGCapacityProviderCreatorFunction
+        - Arn
+      ASG_NAME: !Ref ASGName
+      ECS_CLUSTER_NAME: !Ref ECSClusterName
+  ASGCapacityProviderCreatorFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: ECS_Capacity_Provider_Factory.lambda_handler
+      Timeout: 300
+      Role: !Ref LambdaExecutionRole
+      Runtime: python3.6
+      Environment:
+        Variables:
+          #ASG_NAME: !Ref ASGName
+          #ECS_CLUSTER_NAME: !Ref ECSClusterName
+          TARGETCAPACITY: !Ref TargetCapacity
+          MAXIMUMSCALINGSTEPSIZE: !Ref MaximumScalingStepSize
+          ECSCLUSTER: !Ref ECSClusterName
+          TASKDEFINITION: !Ref ECSTaskDefinition
+          DESIREDCOUNT: 4
+          TARGETGROUPARN: !Ref ALBTargetGroupARN
+          CONTAINERPORT: 80
+      Code:
+        # ZipFile: |
+        #   import logging
+        #   logger = logging.getLogger()
+        S3Bucket: !Ref 'LambdaZipsBucket'
+        S3Key: !Ref 'LambdaZipFunctionS3KeyPrefix'
+Outputs:
+  # TO get data back from Lambda function use crhelper instead as describbed in:
+  # https://aws.amazon.com/blogs/infrastructure-and-automation/aws-cloudformation-custom-resource-creation-with-python-aws-lambda-and-crhelper/
+  LambdaFunction:
+    Description: 'Lambda Function Name'
+    Value: !Ref 'ASGCapacityProviderCreatorFunction'
+  CapacityProvider:
+    Description: 'Capacity Provider ARN'
+    Value: !GetAtt ASGCapacityProviderCreator.CapacityProviderARN
+  ECSServiceName:
+    Description: 'ECS Service Name'
+    Value: !GetAtt ASGCapacityProviderCreator.ECSServiceName

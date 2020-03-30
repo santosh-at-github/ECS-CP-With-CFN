@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Master template that includes nested templates
+Parameters:
+  FileLocation:
+    Description: 'URL where all the yaml file has been saved (wiyhout the .yaml file name).'
+    Type: String
+    Default: 'https://s3.amazonaws.com/MyCloudFormationTemplates/Repo_CFN_Templates/'
+  S3BucketName:
+    Description: 'Name of the S3 bucket in which zip file for Custom Resource Lambda is located.'
+    Type: String
+    Default: MyCloudFormationTemplates
+  S3Key:
+    Description: 'S3 key where the Lambda zip file in above bucket is located for Lambda Custom Resource.'
+    Type: String
+    Default: 'Repo_CFN_Templates/ECS_Capacity_Provider_Factory.zip'
+  DockerImage:
+    Description: 'Docker Image using which ECS Service Will be created.'
+    Type: String
+    Default: '342241566140.dkr.ecr.us-east-1.amazonaws.com/php_apache/web_image:with_improved_php_scripts_colour_env_variable_and_logging_v4'
+Resources:
+  VPCStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Join [ '', [ !Ref FileLocation, 'VPC_PubPriSubnet_2AZ.yaml']]
+      TimeoutInMinutes: '5'
+  IAMResources:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Join [ '', [ !Ref FileLocation, 'IAM_Resources.yaml']]
+      TimeoutInMinutes: '5'
+  ECSClusterStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Join [ '', [ !Ref FileLocation, 'ECSCluster_and_Role.yaml']]
+      TimeoutInMinutes: '5'
+    DependsOn: IAMResources
+  ECSTaskDefinitionStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Join [ '', [ !Ref FileLocation, 'ECS_Task_Definition.yaml']]
+      TimeoutInMinutes: '5'
+      Parameters:
+        DockerImageName: !Ref DockerImage
+        CloudWatchLogsGroup: !GetAtt
+          - ECSClusterStack
+          - Outputs.LogGroup
+        TaskRole: !GetAtt
+          - IAMResources
+          - Outputs.ECSTaskRole
+        TaskExecutionRole: !GetAtt
+          - IAMResources
+          - Outputs.ECSTaskExecutionRole
+    DependsOn: IAMResources
+    DependsOn: ECSClusterStack
+  ALBStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Join [ '', [ !Ref FileLocation, 'TG_and_ALB.yaml' ]]
+      TimeoutInMinutes: '5'
+      Parameters:
+        VPCId: !GetAtt
+          - VPCStack
+          - Outputs.VPC
+        SubnetIds: !Join
+          - ','
+          - - !GetAtt
+              - VPCStack
+              - Outputs.PublicSubnet1
+            - !GetAtt
+              - VPCStack
+              - Outputs.PublicSubnet2
+        ALBSecurityGroups: !Join
+          - ','
+          - - !GetAtt
+              - VPCStack
+              - Outputs.NoIngressSecurityGroup
+            - !GetAtt
+              - VPCStack
+              - Outputs.WebAccessSecurityGroup
+    DependsOn: VPCStack
+  ASGStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Join [ '', [ !Ref FileLocation, 'ECS_ASG_Group.yaml' ]]
+      TimeoutInMinutes: '5'
+      Parameters:
+        ECSCluster: !GetAtt
+          - ECSClusterStack
+          - Outputs.ECSCluster
+        ECSInstanceProfile: !GetAtt
+          - IAMResources
+          - Outputs.IAMInstanceProfile
+        TargetGroupARNs: !GetAtt
+          - ALBStack
+          - Outputs.TargetGroupARN
+        ASGSubnetIds: !Join
+          - ','
+          - - !GetAtt
+              - VPCStack
+              - Outputs.PublicSubnet1
+            - !GetAtt
+              - VPCStack
+              - Outputs.PublicSubnet2
+        LCSecurityGroups: !Join
+          - ','
+          - - !GetAtt
+              - VPCStack
+              - Outputs.NoIngressSecurityGroup
+            - !GetAtt
+              - VPCStack
+              - Outputs.WebAccessSecurityGroup
+    DependsOn: ALBStack
+    DependsOn: ECSClusterStack
+  ECSASGCapacityProviderStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Join [ '', [ !Ref FileLocation, 'Custom_Resource_Capacity_Provider.yaml' ]]
+      TimeoutInMinutes: '5'
+      Parameters:
+        ASGName: !GetAtt
+          - ASGStack
+          - Outputs.ASGName
+        ECSClusterName: !GetAtt
+          - ECSClusterStack
+          - Outputs.ECSCluster
+        LambdaZipsBucket: !Ref S3BucketName #'MyCloudFormationTemplates'
+        LambdaZipFunctionS3KeyPrefix: !Ref S3Key #'Repo_CFN_Templates/ECS_Capacity_Provider_Factory.zip'
+        ECSTaskDefinition: !GetAtt
+          - ECSTaskDefinitionStack
+          - Outputs.TaskDefinitionARN
+        ALBTargetGroupARN: !GetAtt
+          - ALBStack
+          - Outputs.TargetGroupARN
+        LambdaExecutionRole: !GetAtt
+          - IAMResources
+          - Outputs.LambdaExecutionRole
+    DependsOn: ASGStack
+    DependsOn: ECSClusterStack
+Outputs:
+  VpcId:
+    Value: !GetAtt
+      - VPCStack
+      - Outputs.VPC
+  LambdaFunction:
+    Value: !GetAtt
+      - ECSASGCapacityProviderStack
+      - Outputs.LambdaFunction
+  CapacityProvider:
+    Value: !GetAtt
+      - ECSASGCapacityProviderStack
+      - Outputs.CapacityProvider
+  ECSServiceName:
+    Value: !GetAtt
+      - ECSASGCapacityProviderStack
+      - Outputs.ECSServiceName
+  ALBARN:
+    Value: !GetAtt
+      - ALBStack
+      - Outputs.ALBARN

@@ -1,0 +1,25 @@
+Parameters:
+  ClusterName:
+    Description: 'Name of the ECS Cluster'
+    Type: String
+    Default: MyECSCFNCluster
+  LogsRetentionInDays:
+    Description: 'Days for which Logs will be retained in CWL'
+    Type: Number
+    Default: 7
+Resources:
+  Cluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: !Join [ '-', [ !Ref ClusterName, !Ref 'AWS::StackName' ] ]
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      RetentionInDays: !Ref LogsRetentionInDays
+Outputs:
+  ECSCluster:
+    Description: 'ECS Cluster Name'
+    Value: !Ref 'Cluster'
+  LogGroup:
+    Description: 'CWL Group Name'
+    Value: !Ref 'LogGroup'

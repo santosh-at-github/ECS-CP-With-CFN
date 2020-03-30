@@ -1,0 +1,73 @@
+Parameters:
+  ALBSecurityGroups:
+    Description: 'Comma seperated list of one or more Security Groups that will be associated with the ALB'
+    Type: CommaDelimitedList
+  SubnetIds:
+    Description: 'Comma seperated list of one or more Subnets In which ALB will be created'
+    Type: CommaDelimitedList
+  VPCId:
+    Description: 'VPC Id in which the ALB will be created'
+    Type: String
+  LoadBalancerDeregistrationDelay:
+    Description: 'The amount time (in seconds) to wait before changing the state of a deregistering target from draining to unused.'
+    Type: Number
+    Default: 60
+  LoadBalancerIdleTimeout:
+    Description: 'The idle timeout value, in seconds.'
+    Type: Number
+    Default: 60
+    MinValue: 1
+    MaxValue: 4000
+  LoadBalancerScheme:
+    Description: 'Indicates whether the load balancer in front of the ECS service is internet-facing or internal.'
+    Type: String
+    Default: 'internet-facing'
+    AllowedValues:
+    - 'internet-facing'
+    - internal
+
+Resources:
+  DefaultTargetGroup: # not monitored, but LoadBalancer is monitored!
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: '/'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200-299'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPCId
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: !Ref LoadBalancerDeregistrationDelay
+  LoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      LoadBalancerAttributes:
+      - Key: 'idle_timeout.timeout_seconds'
+        Value: !Ref LoadBalancerIdleTimeout
+      - Key: 'routing.http2.enabled'
+        Value: 'true'
+      Scheme: !Ref LoadBalancerScheme
+      SecurityGroups: !Ref ALBSecurityGroups
+      Subnets: !Ref SubnetIds
+  HttpListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+      - TargetGroupArn: !Ref DefaultTargetGroup
+        Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+Outputs:
+  ALBARN:
+    Description: 'ARN of the ALB'
+    Value: !Ref 'LoadBalancer'
+  TargetGroupARN:
+    Description: 'ARN of the Target Group'
+    Value: !Ref 'DefaultTargetGroup'
