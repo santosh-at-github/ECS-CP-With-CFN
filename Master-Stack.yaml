@@ -16,25 +16,25 @@ Parameters:
   DockerImage:
     Description: 'Docker Image using which ECS Service Will be created.'
     Type: String
-    Default: '342241566140.dkr.ecr.us-east-1.amazonaws.com/php_apache/web_image:with_improved_php_scripts_colour_env_variable_and_logging_v4'
+    Default: 'santosham2007s/ec2-instance-info:v1'
 Resources:
-  VPCStack:
+  VpcStack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Join [ '', [ !Ref FileLocation, 'VPC_PubPriSubnet_2AZ.yaml']]
       TimeoutInMinutes: '5'
-  IAMResources:
+  IamStack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Join [ '', [ !Ref FileLocation, 'IAM_Resources.yaml']]
       TimeoutInMinutes: '5'
-  ECSClusterStack:
+  EcsClusterStack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Join [ '', [ !Ref FileLocation, 'ECSCluster_and_Role.yaml']]
       TimeoutInMinutes: '5'
-    DependsOn: IAMResources
-  ECSTaskDefinitionStack:
+    DependsOn: IamStack
+  EcsTDStack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Join [ '', [ !Ref FileLocation, 'ECS_Task_Definition.yaml']]
@@ -42,118 +42,133 @@ Resources:
       Parameters:
         DockerImageName: !Ref DockerImage
         CloudWatchLogsGroup: !GetAtt
-          - ECSClusterStack
+          - EcsClusterStack
           - Outputs.LogGroup
         TaskRole: !GetAtt
-          - IAMResources
+          - IamStack
           - Outputs.ECSTaskRole
         TaskExecutionRole: !GetAtt
-          - IAMResources
+          - IamStack
           - Outputs.ECSTaskExecutionRole
-    DependsOn: IAMResources
-    DependsOn: ECSClusterStack
-  ALBStack:
+    DependsOn: IamStack
+    DependsOn: EcsClusterStack
+  AlbStack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Join [ '', [ !Ref FileLocation, 'TG_and_ALB.yaml' ]]
       TimeoutInMinutes: '5'
       Parameters:
         VPCId: !GetAtt
-          - VPCStack
+          - VpcStack
           - Outputs.VPC
         SubnetIds: !Join
           - ','
           - - !GetAtt
-              - VPCStack
+              - VpcStack
               - Outputs.PublicSubnet1
             - !GetAtt
-              - VPCStack
+              - VpcStack
               - Outputs.PublicSubnet2
         ALBSecurityGroups: !Join
           - ','
           - - !GetAtt
-              - VPCStack
+              - VpcStack
               - Outputs.NoIngressSecurityGroup
             - !GetAtt
-              - VPCStack
+              - VpcStack
               - Outputs.WebAccessSecurityGroup
-    DependsOn: VPCStack
-  ASGStack:
+    DependsOn: VpcStack
+  AsgStack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Join [ '', [ !Ref FileLocation, 'ECS_ASG_Group.yaml' ]]
       TimeoutInMinutes: '5'
       Parameters:
         ECSCluster: !GetAtt
-          - ECSClusterStack
+          - EcsClusterStack
           - Outputs.ECSCluster
         ECSInstanceProfile: !GetAtt
-          - IAMResources
+          - IamStack
           - Outputs.IAMInstanceProfile
         TargetGroupARNs: !GetAtt
-          - ALBStack
+          - AlbStack
           - Outputs.TargetGroupARN
         ASGSubnetIds: !Join
           - ','
           - - !GetAtt
-              - VPCStack
+              - VpcStack
               - Outputs.PublicSubnet1
             - !GetAtt
-              - VPCStack
+              - VpcStack
               - Outputs.PublicSubnet2
         LCSecurityGroups: !Join
           - ','
           - - !GetAtt
-              - VPCStack
+              - VpcStack
               - Outputs.NoIngressSecurityGroup
             - !GetAtt
-              - VPCStack
+              - VpcStack
               - Outputs.WebAccessSecurityGroup
-    DependsOn: ALBStack
-    DependsOn: ECSClusterStack
-  ECSASGCapacityProviderStack:
+    DependsOn: AlbStack
+    DependsOn: EcsClusterStack
+  EcsAsgCPStack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Join [ '', [ !Ref FileLocation, 'Custom_Resource_Capacity_Provider.yaml' ]]
       TimeoutInMinutes: '5'
       Parameters:
         ASGName: !GetAtt
-          - ASGStack
+          - AsgStack
           - Outputs.ASGName
         ECSClusterName: !GetAtt
-          - ECSClusterStack
+          - EcsClusterStack
           - Outputs.ECSCluster
-        LambdaZipsBucket: !Ref S3BucketName #'MyCloudFormationTemplates'
-        LambdaZipFunctionS3KeyPrefix: !Ref S3Key #'Repo_CFN_Templates/ECS_Capacity_Provider_Factory.zip'
+        LambdaZipsBucket: !Ref S3BucketName
+        LambdaZipFunctionS3KeyPrefix: !Ref S3Key
         ECSTaskDefinition: !GetAtt
-          - ECSTaskDefinitionStack
+          - EcsTDStack
           - Outputs.TaskDefinitionARN
         ALBTargetGroupARN: !GetAtt
-          - ALBStack
+          - AlbStack
           - Outputs.TargetGroupARN
         LambdaExecutionRole: !GetAtt
-          - IAMResources
+          - IamStack
           - Outputs.LambdaExecutionRole
-    DependsOn: ASGStack
-    DependsOn: ECSClusterStack
+    DependsOn: AsgStack
+    DependsOn: EcsClusterStack
 Outputs:
   VpcId:
+    Description: 'VPC Name'
     Value: !GetAtt
-      - VPCStack
+      - VpcStack
       - Outputs.VPC
   LambdaFunction:
+    Description: 'Lambda Function Name'
     Value: !GetAtt
-      - ECSASGCapacityProviderStack
+      - EcsAsgCPStack
       - Outputs.LambdaFunction
   CapacityProvider:
+    Description: 'Capacity Provider Name'
     Value: !GetAtt
-      - ECSASGCapacityProviderStack
+      - EcsAsgCPStack
       - Outputs.CapacityProvider
-  ECSServiceName:
+  EcsServiceName:
+    Description: 'ECS Service Name'
     Value: !GetAtt
-      - ECSASGCapacityProviderStack
+      - EcsAsgCPStack
       - Outputs.ECSServiceName
-  ALBARN:
+  AlbArn:
+    Description: 'ALB ARN'
     Value: !GetAtt
-      - ALBStack
+      - AlbStack
       - Outputs.ALBARN
+  AlbDnsName:
+    Description: 'ALB DNS Name'
+    Value: !GetAtt
+      - AlbStack
+      - Outputs.ALBDNSName
+  EcsServiceScalingPolicy:
+    Description: 'ECS Service Scaling Policy ARN'
+    Value: !GetAtt
+    - EcsAsgCPStack
+    - Outputs.ECSServiceScalingPolicy

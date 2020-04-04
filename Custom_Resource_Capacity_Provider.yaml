@@ -35,15 +35,15 @@ Parameters:
     MinValue: 1
     MaxValue: 100
 Resources:
-  ASGCapacityProviderCreator:
+  AsgCPCreator:
     Type: 'Custom::ASGCapacityProvider'
     Properties:
       ServiceToken: !GetAtt
-        - ASGCapacityProviderCreatorFunction
+        - AsgCPFunction
         - Arn
       ASG_NAME: !Ref ASGName
       ECS_CLUSTER_NAME: !Ref ECSClusterName
-  ASGCapacityProviderCreatorFunction:
+  AsgCPFunction:
     Type: 'AWS::Lambda::Function'
     Properties:
       Handler: ECS_Capacity_Provider_Factory.lambda_handler
@@ -72,10 +72,13 @@ Outputs:
   # https://aws.amazon.com/blogs/infrastructure-and-automation/aws-cloudformation-custom-resource-creation-with-python-aws-lambda-and-crhelper/
   LambdaFunction:
     Description: 'Lambda Function Name'
-    Value: !Ref 'ASGCapacityProviderCreatorFunction'
+    Value: !Ref 'AsgCPFunction'
   CapacityProvider:
     Description: 'Capacity Provider ARN'
-    Value: !GetAtt ASGCapacityProviderCreator.CapacityProviderARN
+    Value: !GetAtt AsgCPCreator.CapacityProviderARN
   ECSServiceName:
     Description: 'ECS Service Name'
-    Value: !GetAtt ASGCapacityProviderCreator.ECSServiceName
+    Value: !GetAtt AsgCPCreator.ECSServiceName
+  ECSServiceScalingPolicy:
+    Description: 'ECS Service Scaling Policy ARN'
+    Value: !GetAtt AsgCPCreator.ECSServiceScalingPolicy

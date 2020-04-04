@@ -68,6 +68,9 @@ Outputs:
   ALBARN:
     Description: 'ARN of the ALB'
     Value: !Ref 'LoadBalancer'
+  ALBDNSName:
+    Description: 'DNS Name of the ALB'
+    Value: !GetAtt LoadBalancer.DNSName
   TargetGroupARN:
     Description: 'ARN of the Target Group'
     Value: !Ref 'DefaultTargetGroup'
