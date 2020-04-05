@@ -143,6 +143,8 @@ Resources:
             - "s3:List*"
             - "s3:Get*"
             - "iam:PassRole"
+            - "iam:CreateServiceLinkedRole"
+            - "sts:AssumeRole"
             Resource: '*'
 Outputs:
   IAMInstanceProfile:
