@@ -119,14 +119,22 @@ def CreateECSService(Action, responseData):
         return responseData
 
     if Action == 'Delete':
-        response = ECSClient.update_service(
-            cluster=Cluster,
-            service=ECSServiceName,
-            desiredCount=0
-        )
-        print("Update ECS Service desired count API status: {}".format(response))
+        # Update Service Desired Count to 0
+        ECSServices = ECSClient.list_services(cluster=Cluster)
+        for ECSService in ECSServices['serviceArns']:
+            response = ECSClient.update_service(
+                    cluster=Cluster,
+                    service=ECSService,
+                    desiredCount=0
+            )
+            if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+                print("Service \"{}\" updated successfully".format(ECSService))
+            else:
+                print("Failed to update service \"{}\"".format(ECSService))
+                print(response)
         time.sleep(10)
 
+        # Delete Application AutoScaling
         response  = AppASClient.delete_scaling_policy(
                         PolicyName=ScalingPolicyName,
                         ServiceNamespace='ecs',
@@ -142,12 +150,43 @@ def CreateECSService(Action, responseData):
                     )
         print("Delete Application AutoScaling Scalable Target API status: {}".format(response))
 
-        response = ECSClient.delete_service(
-            cluster=Cluster,
-            service=ECSServiceName,
-            force=True
-        )
-        print('Deleted ECS Service ' + ECSServiceName)
+        # Delete Services
+        for ECSService in ECSServices['serviceArns']:
+            response = ECSClient.delete_service(
+                    cluster=Cluster,
+                    service=ECSService,
+                    force=True
+            )
+            if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+                print("Service \"{}\" stopped successfully".format(ECSService))
+            else:
+                print("Failed to stop service \"{}\"".format(ECSService))
+                print(response)
+
+        # Delete Capacity Providers
+        time.sleep(10)
+
+        # Stop any Tasks which is still running in the cluster
+        ECSTasks = ECSClient.list_tasks(cluster=Cluster)
+        for Task in ECSTasks['taskArns']:
+            response = ECSClient.stop_task(cluster=Cluster, task=Task)
+            if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+                print("Task \"{}\" deleted".format(Task))
+            else:
+                print("Couldn't delete task \"{}\"".format(Task))
+                print(response)
+
+        # Delete Capacity Provider
+        ECSClusters = ECSClient.describe_clusters(clusters=[Cluster])
+        for ECSCluster in ECSClusters['clusters']:
+            for CP in ECSCluster['capacityProviders']:
+                response = ECSClient.delete_capacity_provider(capacityProvider=CP)
+                if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+                    print("Capacity Provider \"{}\" deleted successfully".format(CP))
+                else:
+                    print("Couldn't delete Capacity Provider \"{}\"".format(CP))
+                    print(response)
+
     return responseData
 
 def SignalCFN(event, context, Status, responseData, ResourceId):
@@ -288,3 +327,5 @@ def lambda_handler(event, context):
 # context = Test('MyTestLogStream')
 
 # zip -r ../myDeploymentPackage.zip .
+
+
