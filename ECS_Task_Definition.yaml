@@ -35,5 +35,5 @@ Resources:
               awslogs-region: !Ref AWS::Region
 Outputs:
   TaskDefinitionARN:
-    Description: 'ARN of the Task Drfinition'
+    Description: 'ARN of the Task Definition'
     Value: !Ref 'TaskDefinition'

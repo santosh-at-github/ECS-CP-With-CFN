@@ -10,15 +10,15 @@ Parameters:
     Type: String
     Default: 'Repo_CFN_Templates/ECS_Capacity_Provider_Factory.zip'
   FileLocation:
-    Description: 'URL where all the yaml file has been saved (wiyhout the .yaml file name).'
+    Description: 'URL where all the yaml file has been saved (without the .yaml file name).'
     Type: String
     Default: 'https://s3.amazonaws.com/MyCloudFormationTemplates/Repo_CFN_Templates/'
   DockerImage:
     Description: 'Docker Image using which ECS Service Will be created.'
     Type: String
-    Default: 'MyAccountNumber.dkr.ecr.us-east-1.amazonaws.com/php_apache/web_image:with_improved_php_scripts_colour_env_variable_and_logging_v4'
+    Default: 'santosham2007s/ec2-instance-info:v1'
   ECSSSHKeyName:
-    Description: The Key Pair to allow SSH access to the instances
+    Description: 'The Key Pair to allow SSH access to the instances'
     Type: AWS::EC2::KeyPair::KeyName
     Default: MainPubKey
 Resources:
